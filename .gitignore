@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Entornos virtuales
+venv/
+.venv/
+
+# Variables de entorno y secretos
+.env
+*.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+logs/
+
+# Archivos temporales
+*.tmp
+*.temp
+
+# VS Code
+.vscode/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Datos locales
+data/raw/
+
+# Spark
+.sparkStaging/
+metastore_db/
+derby.log
+
+# Airflow
+airflow.db
+airflow-webserver.pid

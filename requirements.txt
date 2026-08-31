@@ -1,0 +1,7 @@
+pandas
+numpy
+pyspark
+sqlalchemy
+psycopg2-binary
+great-expectations
+scikit-learn
