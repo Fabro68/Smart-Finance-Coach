@@ -70,5 +70,15 @@ services:
       - ./plugins:/opt/airflow/plugins
     command: scheduler
 
+  spark:
+    image: apache/spark:3.5.5-python3
+    container_name: smart-finance-spark
+    volumes:
+      - ./src:/opt/project/src
+      - ./data:/opt/project/data
+    working_dir: /opt/project
+    command: >
+      /bin/bash -c "tail -f /dev/null"
+
 volumes:
   postgres_data:
