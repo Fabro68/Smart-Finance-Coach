@@ -24,7 +24,7 @@ df_bronze = (
     .withColumn("_source_file", input_file_name())
 )
 
-df_bronze.write.mode("overwrite").parquet(output_path)
+df_bronze.write.format("delta").mode("overwrite").save(output_path)
 
 print("Ingestion completed successfully.")
 print(f"Rows ingested: {df_bronze.count()}")

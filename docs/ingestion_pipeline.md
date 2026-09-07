@@ -4,7 +4,7 @@
 
 La etapa de ingestión del proyecto Smart Finance Coach tiene como objetivo trasladar los datos desde la capa Raw hacia la capa Bronze del Lakehouse.
 
-La capa Raw conserva los archivos originales, mientras que Bronze almacena una representación estructurada en formato Parquet, manteniendo los datos de origen sin aplicar reglas de negocio, limpieza o transformaciones analíticas.
+La capa Raw conserva los archivos originales, mientras que Bronze almacena una representación estructurada mediante Delta Lake, manteniendo los datos de origen sin aplicar reglas de negocio, limpieza o transformaciones analíticas. La implementación inicial de la Semana 6 utilizó Parquet y posteriormente fue migrada a Delta Lake durante la Semana 7.
 
 Las transformaciones de tipos, reglas de calidad, homologación e integración de fuentes se realizarán posteriormente en la capa Silver.
 
@@ -20,7 +20,7 @@ Fuentes de datos
       |
       | PySpark
       v
- BRONZE (Parquet)
+ BRONZE (Delta Lake)
       |
       v
  SILVER
@@ -217,7 +217,7 @@ docker compose exec spark /opt/spark/bin/spark-submit /opt/project/src/ingestion
 
 ## 7. Validación
 
-Después de ejecutar los pipelines se verificó la generación correcta de los datasets Parquet mediante los archivos `_SUCCESS` producidos por Spark.
+Durante la Semana 6, la implementación inicial en Parquet fue validada mediante los archivos _SUCCESS generados por Spark. Posteriormente, en la Semana 7, los datasets Bronze fueron migrados a Delta Lake y se validó la existencia del directorio _delta_log en cada una de las seis tablas.
 
 Se generaron correctamente seis destinos Bronze:
 
@@ -254,3 +254,7 @@ La limpieza, tipificación, estandarización, validación de calidad e integraci
 Al finalizar esta etapa se dispone de un pipeline reproducible de ingestión Raw → Bronze utilizando PySpark y Docker.
 
 Las cuatro fuentes principales del proyecto se encuentran disponibles en la capa Bronze y preparadas para iniciar los procesos de transformación y calidad correspondientes a Silver.
+
+## 10. Resultado de la semana 7
+
+En la Semana 6, la capa Bronze se implementó inicialmente utilizando archivos Parquet. Durante la Semana 7, esta capa fue migrada a Delta Lake 3.2.0, manteniendo Parquet como formato físico de almacenamiento y agregando el transaction log (_delta_log) proporcionado por Delta Lake.

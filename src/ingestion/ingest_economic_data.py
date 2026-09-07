@@ -37,7 +37,7 @@ for source in sources:
         .withColumn("_source_file", input_file_name())
     )
 
-    df_bronze.write.mode("overwrite").parquet(source["output"])
+    df_bronze.write.format("delta").mode("overwrite").save(source["output"])
 
     print("Ingestion completed successfully.")
     print(f"Source: {source['input']}")

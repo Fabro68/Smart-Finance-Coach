@@ -76,6 +76,7 @@ services:
     volumes:
       - ./src:/opt/project/src
       - ./data:/opt/project/data
+      - ./config/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
     working_dir: /opt/project
     command: >
       /bin/bash -c "tail -f /dev/null"
