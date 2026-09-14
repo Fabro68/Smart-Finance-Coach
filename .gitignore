@@ -43,3 +43,6 @@ airflow-webserver.pid
 
 # Capas generadas del Lakehouse
 data/bronze/
+
+# Capa Silver generada
+data/silver/
