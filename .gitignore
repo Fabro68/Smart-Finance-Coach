@@ -46,3 +46,7 @@ data/bronze/
 
 # Capa Silver generada
 data/silver/
+
+data/audit/
+
+data/quality/
