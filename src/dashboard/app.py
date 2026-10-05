@@ -225,6 +225,11 @@ audit_df = load_jsonl(
     AUDIT_PATH
 )
 
+if not audit_df.empty and "process_name" in audit_df.columns:
+    audit_df = audit_df[
+        audit_df["process_name"] != "test_audit_logger"
+    ]
+
 quality_df = load_jsonl(
     QUALITY_PATH
 )
@@ -241,6 +246,49 @@ counts = latest_success_counts(
 quality_df_summary = quality_summary(
     quality_df
 )
+
+relationship_metrics = {}
+
+if (
+    not quality_df.empty
+    and "dataset" in quality_df.columns
+    and "check_name" in quality_df.columns
+):
+
+    relationship_df = quality_df[
+        quality_df["dataset"]
+        == "users_transactions"
+    ].copy()
+
+    if not relationship_df.empty:
+
+        if "checked_at" in relationship_df.columns:
+            relationship_df["checked_at"] = pd.to_datetime(
+                relationship_df["checked_at"],
+                errors="coerce",
+                utc=True,
+            )
+
+            relationship_df = relationship_df.sort_values(
+                "checked_at"
+            )
+
+        latest_run_id = (
+            relationship_df[
+                "quality_run_id"
+            ].iloc[-1]
+        )
+
+        relationship_df = relationship_df[
+            relationship_df[
+                "quality_run_id"
+            ] == latest_run_id
+        ]
+
+        for _, row in relationship_df.iterrows():
+            relationship_metrics[
+                row["check_name"]
+            ] = row["observed_value"]
 
 
 st.title(
@@ -472,24 +520,43 @@ elif page == "Pipeline":
             audit_df.copy()
         )
 
-        if "end_time" in pipeline_df.columns:
+    if (
+        "start_time" in pipeline_df.columns
+        and "end_time" in pipeline_df.columns
+    ):
 
-            pipeline_df["end_time"] = (
-                pd.to_datetime(
-                    pipeline_df[
-                        "end_time"
-                    ],
-                    errors="coerce",
-                    utc=True,
-                )
-            )
+        pipeline_df["start_time"] = pd.to_datetime(
+            pipeline_df["start_time"],
+            errors="coerce",
+            utc=True,
+        )
 
-            pipeline_df = (
-                pipeline_df
-                .sort_values(
-                    "end_time",
-                    ascending=False,
-                )
+        pipeline_df["end_time"] = pd.to_datetime(
+            pipeline_df["end_time"],
+            errors="coerce",
+            utc=True,
+        )
+
+        pipeline_df["duration_seconds"] = (
+            pipeline_df["end_time"]
+            - pipeline_df["start_time"]
+        ).dt.total_seconds()
+
+        pipeline_df = pipeline_df.sort_values(
+            "end_time",
+            ascending=False,
+        )
+
+        latest_update = None
+
+        if (
+            "end_time" in pipeline_df.columns
+            and not pipeline_df["end_time"].dropna().empty
+        ):
+            latest_update = (
+                pipeline_df["end_time"]
+                .dropna()
+                .max()
             )
 
         columns = [
@@ -501,12 +568,136 @@ elif page == "Pipeline":
                 "status",
                 "records_read",
                 "records_written",
+                "duration_seconds",
                 "start_time",
                 "end_time",
             ]
             if column
             in pipeline_df.columns
         ]
+
+        if "duration_seconds" in pipeline_df.columns:
+            valid_durations = pipeline_df[
+                "duration_seconds"
+            ].dropna()
+
+            average_duration = (
+                valid_durations.mean()
+                if not valid_durations.empty
+                else 0
+            )
+
+            max_duration = (
+                valid_durations.max()
+                if not valid_durations.empty
+                else 0
+            )
+
+            success_count = (
+                pipeline_df["status"]
+                .eq("SUCCESS")
+                .sum()
+                if "status" in pipeline_df.columns
+                else 0
+            )
+
+            failed_count = (
+                pipeline_df["status"]
+                .eq("FAILED")
+                .sum()
+                if "status" in pipeline_df.columns
+                else 0
+            )
+
+            total_runs = (
+                success_count
+                + failed_count
+            )
+
+            success_rate = (
+                (success_count / total_runs) * 100
+                if total_runs > 0
+                else 0
+            )
+
+            failure_rate = (
+                (failed_count / total_runs) * 100
+                if total_runs > 0
+                else 0
+            )
+
+            c1, c2, c3, c4, c5, c6 = st.columns(6)
+
+            c1.metric(
+                "Duración promedio",
+                f"{average_duration:.1f} s",
+            )
+
+            c2.metric(
+                "Duración máxima",
+                f"{max_duration:.1f} s",
+            )
+
+            c3.metric(
+                "Ejecuciones exitosas",
+                int(success_count),
+            )
+
+            c4.metric(
+                "Tasa de éxito",
+                f"{success_rate:.1f}%",
+            )
+
+            c5.metric(
+                "Tasa de error",
+                f"{failure_rate:.1f}%",
+            )
+
+            c6.metric(
+                "Última actualización",
+                (
+                    latest_update.strftime(
+                        "%Y-%m-%d %H:%M"
+                    )
+                    if latest_update is not None
+                    else "N/D"
+                ),
+            )
+
+        st.subheader(
+            "Volumen procesado por dataset"
+        )
+
+        volume_data = {
+            "users": counts["users"] or 0,
+            "transactions": counts["transactions"] or 0,
+            "loans": counts["loans"] or 0,
+            "economic_data": counts["economic_data"] or 0,
+        }
+
+        volume_df = pd.DataFrame(
+            list(volume_data.items()),
+            columns=[
+                "dataset",
+                "records",
+            ],
+        )
+
+        volume_df = (
+            volume_df
+            .set_index("dataset")
+        )
+
+        st.bar_chart(
+            volume_df,
+            y_label="Registros",
+        )
+
+        st.dataframe(
+            volume_df.reset_index(),
+            use_container_width=True,
+            hide_index=True,
+        )
 
         st.dataframe(
             pipeline_df[
@@ -574,6 +765,48 @@ elif page == "Calidad":
         c3.metric(
             "Calidad estructural",
             f"{overall_rate:.1f}%",
+        )
+
+        st.subheader(
+            "Calidad relacional users ↔ transactions"
+        )
+
+        r1, r2, r3, r4 = st.columns(4)
+
+        r1.metric(
+            "Transacciones vinculadas",
+            f"{relationship_metrics.get(
+                'transaction_user_linkage_percentage',
+                0
+            ):.2f}%",
+        )
+
+        r2.metric(
+            "Integridad referencial",
+            f"{relationship_metrics.get(
+                'valid_linked_transactions_percentage',
+                0
+            ):.2f}%",
+        )
+
+        r3.metric(
+            "Usuarios con transacciones",
+            int(
+                relationship_metrics.get(
+                    "users_with_transactions",
+                    0
+                )
+            ),
+        )
+
+        r4.metric(
+            "Usuarios sin transacciones",
+            int(
+                relationship_metrics.get(
+                    "users_without_transactions",
+                    0
+                )
+            ),
         )
 
         st.dataframe(
