@@ -24,6 +24,8 @@ services:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
+      - ./data:/opt/project/data
+
     command: >
       bash -c "
       airflow db migrate &&
@@ -51,6 +53,7 @@ services:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
+      - ./data:/opt/project/data
     ports:
       - "8080:8080"
     command: webserver
@@ -69,6 +72,7 @@ services:
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/opt/project/data
     command: scheduler
 
   spark:
