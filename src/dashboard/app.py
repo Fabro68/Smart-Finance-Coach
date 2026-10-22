@@ -4,6 +4,8 @@ import json
 import pandas as pd
 import streamlit as st
 
+from deltalake import DeltaTable
+
 
 st.set_page_config(
     page_title="Smart Finance Coach",
@@ -27,20 +29,27 @@ QUALITY_PATH = (
     / "quality_results.jsonl"
 )
 
-DASHBOARD_USERS_PATH = (
+
+GOLD_KPIS_PATH = (
     PROJECT_ROOT
     / "data"
-    / "dashboard"
-    / "users"
+    / "gold"
+    / "user_financial_kpis"
 )
 
-DASHBOARD_TRANSACTIONS_PATH = (
+GOLD_PROFILE_PATH = (
     PROJECT_ROOT
     / "data"
-    / "dashboard"
-    / "transactions"
+    / "gold"
+    / "user_financial_profile"
 )
 
+GOLD_MONTHLY_FINANCE_PATH = (
+    PROJECT_ROOT
+    / "data"
+    / "gold"
+    / "user_monthly_finance"
+)
 
 def load_jsonl(path: Path) -> pd.DataFrame:
     if not path.exists():
@@ -81,6 +90,14 @@ def load_spark_csv_folder(path: Path) -> pd.DataFrame:
         ],
         ignore_index=True,
     )
+
+def load_delta_table(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame()
+
+    table = DeltaTable(str(path))
+
+    return table.to_pyarrow_table().to_pandas()
 
 
 def latest_success_counts(
@@ -271,12 +288,17 @@ if not quality_df.empty and "dataset" in quality_df.columns:
         quality_df["dataset"] != "test_dataset"
     ]
 
-users_df = load_spark_csv_folder(
-    DASHBOARD_USERS_PATH
+users_df = load_delta_table(
+    GOLD_PROFILE_PATH
 )
 
-transactions_df = load_spark_csv_folder(
-    DASHBOARD_TRANSACTIONS_PATH
+
+kpis_df = load_delta_table(
+    GOLD_KPIS_PATH
+)
+
+monthly_finance_df = load_delta_table(
+    GOLD_MONTHLY_FINANCE_PATH
 )
 
 counts = latest_success_counts(
@@ -347,29 +369,72 @@ if not users_df.empty:
     )
 
 
-if not transactions_df.empty:
-    transactions_df["user_id"] = pd.to_numeric(
-        transactions_df["user_id"],
+
+if not kpis_df.empty:
+    kpis_df["user_id"] = pd.to_numeric(
+        kpis_df["user_id"],
         errors="coerce",
     )
 
-    transactions_df["monto"] = pd.to_numeric(
-        transactions_df["monto"],
-        errors="coerce",
-    )
-
-    transactions_df["fecha"] = pd.to_datetime(
-        transactions_df["fecha"],
-        errors="coerce",
-    )
-
-    transactions_df["tipo"] = (
-        transactions_df["tipo"]
+    kpis_df["year_month"] = (
+        kpis_df["year_month"]
         .astype(str)
-        .str.lower()
-        .str.strip()
     )
 
+    numeric_kpi_columns = [
+        "salary_monthly",
+        "consumer_spending",
+        "total_debits",
+        "total_credits",
+        "transactional_balance",
+        "estimated_margin",
+        "spending_to_salary_ratio",
+        "estimated_savings_capacity",
+        "estimated_savings_rate",
+        "previous_month_spending",
+        "spending_change_pct",
+    ]
+
+    for column in numeric_kpi_columns:
+        kpis_df[column] = pd.to_numeric(
+            kpis_df[column],
+            errors="coerce",
+        )
+
+if not monthly_finance_df.empty:
+    monthly_finance_df["user_id"] = pd.to_numeric(
+        monthly_finance_df["user_id"],
+        errors="coerce",
+    )
+
+    monthly_finance_df["year_month"] = (
+        monthly_finance_df["year_month"]
+        .astype(str)
+    )
+
+    numeric_monthly_columns = [
+        "salary_monthly",
+        "transaction_count",
+        "debit_count",
+        "credit_count",
+        "total_debits",
+        "total_credits",
+        "transactional_balance",
+        "consumer_spending",
+        "credit_card_payments",
+        "estimated_margin",
+        "spending_to_salary_ratio",
+        "estimated_savings_capacity",
+        "estimated_savings_rate",
+        "average_debit_amount",
+        "average_credit_amount",
+    ]
+
+    for column in numeric_monthly_columns:
+        monthly_finance_df[column] = pd.to_numeric(
+            monthly_finance_df[column],
+            errors="coerce",
+        )
 
 def fix_text(value):
     """
@@ -411,19 +476,6 @@ for column in [
         )
 
 
-for column in [
-    "descripcion",
-    "categoria",
-    "cuenta",
-]:
-    if (
-        not transactions_df.empty
-        and column in transactions_df.columns
-    ):
-        transactions_df[column] = (
-            transactions_df[column]
-            .map(fix_text)
-        )
 
 
 # ============================================================
@@ -450,30 +502,21 @@ if users_df.empty:
     st.stop()
 
 
-if transactions_df.empty:
-    st.error(
-        "No se encontraron transacciones "
-        "para mostrar el dashboard."
-    )
-    st.stop()
-
-
 # Usuarios que realmente tienen transacciones asociadas
-transaction_user_ids = (
-    transactions_df[
+gold_user_ids = (
+    kpis_df[
         "user_id"
     ]
     .dropna()
     .unique()
 )
 
-
 available_users = (
     users_df[
         users_df[
             "user_id"
         ].isin(
-            transaction_user_ids
+            gold_user_ids
         )
     ]
     .copy()
@@ -543,24 +586,25 @@ user_row = (
 )
 
 
-user_transactions = (
-    transactions_df[
-        transactions_df["user_id"]
+user_kpis = (
+    kpis_df[
+        kpis_df["user_id"]
         == selected_user_id
     ]
     .copy()
+    .sort_values(
+        "year_month"
+    )
 )
 
-
-user_transactions = (
-    user_transactions
-    .dropna(
-        subset=[
-            "fecha",
-        ]
-    )
+user_monthly_finance = (
+    monthly_finance_df[
+        monthly_finance_df["user_id"]
+        == selected_user_id
+    ]
+    .copy()
     .sort_values(
-        "fecha"
+        "year_month"
     )
 )
 
@@ -583,38 +627,22 @@ if page == "Mis finanzas":
     )
 
 
-    if user_transactions.empty:
+    if user_monthly_finance.empty:
 
         st.info(
             "Este usuario no tiene "
-            "movimientos disponibles."
+            "información financiera disponible."
         )
 
         st.stop()
-
 
     # --------------------------------------------------------
     # PERIODO
     # --------------------------------------------------------
 
-    user_transactions[
-        "periodo"
-    ] = (
-        user_transactions[
-            "fecha"
-        ]
-        .dt.to_period(
-            "M"
-        )
-        .astype(
-            str
-        )
-    )
-
-
     periods = sorted(
-        user_transactions[
-            "periodo"
+        user_monthly_finance[
+            "year_month"
         ]
         .dropna()
         .unique(),
@@ -639,7 +667,7 @@ if page == "Mis finanzas":
     ):
 
         period_df = (
-            user_transactions
+            user_monthly_finance
             .copy()
         )
 
@@ -650,9 +678,9 @@ if page == "Mis finanzas":
     else:
 
         period_df = (
-            user_transactions[
-                user_transactions[
-                    "periodo"
+            user_monthly_finance[
+                user_monthly_finance[
+                    "year_month"
                 ]
                 == selected_period
             ]
@@ -668,42 +696,53 @@ if page == "Mis finanzas":
     # DÉBITOS Y CRÉDITOS
     # --------------------------------------------------------
 
-    debit_df = (
-        period_df[
-            period_df["tipo"]
-            == "debit"
-        ]
-        .copy()
-    )
+    if (
+        selected_period
+        == "Todo el historial"
+    ):
 
+        total_debits = (
+            period_df[
+                "total_debits"
+            ].sum()
+        )
 
-    credit_df = (
-        period_df[
-            period_df["tipo"]
-            == "credit"
-        ]
-        .copy()
-    )
+        total_credits = (
+            period_df[
+                "total_credits"
+            ].sum()
+        )
 
+        transaction_balance = (
+            period_df[
+                "transactional_balance"
+            ].sum()
+        )
 
-    total_debits = (
-        debit_df[
-            "monto"
-        ].sum()
-    )
+    else:
 
+        period_row = (
+            period_df
+            .iloc[0]
+        )
 
-    total_credits = (
-        credit_df[
-            "monto"
-        ].sum()
-    )
+        total_debits = float(
+            period_row[
+                "total_debits"
+            ]
+        )
 
+        total_credits = float(
+            period_row[
+                "total_credits"
+            ]
+        )
 
-    transaction_balance = (
-        total_credits
-        - total_debits
-    )
+        transaction_balance = float(
+            period_row[
+                "transactional_balance"
+            ]
+        )
 
 
     monthly_salary = float(
@@ -762,19 +801,17 @@ if page == "Mis finanzas":
         != "Todo el historial"
     ):
 
-        estimated_margin = (
-            monthly_salary
-            - total_debits
+        estimated_margin = float(
+            period_row[
+                "estimated_margin"
+            ]
         )
 
-
-        spending_ratio = (
-            total_debits
-            / monthly_salary
-            * 100
-            if monthly_salary > 0
-            else 0
-        )
+        spending_ratio = float(
+            period_row[
+                "spending_to_salary_ratio"
+            ]
+        ) * 100
 
 
         st.subheader(
@@ -801,7 +838,7 @@ if page == "Mis finanzas":
 
         m3.metric(
             "Movimientos",
-            f"{len(period_df):,}",
+            f"{int(period_row['transaction_count']):,}",
         )
 
 
@@ -834,40 +871,26 @@ if page == "Mis finanzas":
 
 
         monthly = (
-            user_transactions
-            .assign(
-                mes=(
-                    user_transactions[
-                        "fecha"
-                    ]
-                    .dt.to_period(
-                        "M"
-                    )
-                    .astype(
-                        str
-                    )
-                )
+            user_monthly_finance[
+                [
+                    "year_month",
+                    "total_debits",
+                    "total_credits",
+                ]
+            ]
+            .copy()
+            .set_index(
+                "year_month"
             )
-            .pivot_table(
-                index="mes",
-                columns="tipo",
-                values="monto",
-                aggfunc="sum",
-                fill_value=0,
-            )
-            .sort_index()
-        )
-
-
-        monthly = (
-            monthly.rename(
+            .rename(
                 columns={
-                    "debit":
+                    "total_debits":
                         "Débitos",
-                    "credit":
+                    "total_credits":
                         "Créditos",
                 }
             )
+            .sort_index()
         )
 
 
@@ -883,21 +906,22 @@ if page == "Mis finanzas":
         )
 
 
-        spending_df = (
-            debit_df[
-                debit_df["categoria"]
-                != "Credit Card Payment"
-            ]
-            .copy()
-        )
-
-
         category_spend = (
-            spending_df
+            user_monthly_finance[
+                [
+                    "top_spending_category",
+                    "consumer_spending",
+                ]
+            ]
+            .dropna(
+                subset=[
+                    "top_spending_category",
+                ]
+            )
             .groupby(
-                "categoria"
+                "top_spending_category"
             )[
-                "monto"
+                "consumer_spending"
             ]
             .sum()
             .sort_values(
@@ -906,12 +930,11 @@ if page == "Mis finanzas":
             .head(10)
         )
 
-
         if category_spend.empty:
 
             st.info(
-                "No hay débitos "
-                "en este periodo."
+                "No hay información de gasto "
+                "por categoría disponible."
             )
 
         else:
@@ -932,156 +955,68 @@ if page == "Mis finanzas":
     )
 
 
-    if not debit_df.empty:
+    if not period_df.empty:
 
-        category_totals = (
-            spending_df
-            .groupby(
-                "categoria"
-            )[
-                "monto"
-            ]
-            .sum()
-            .sort_values(
-                ascending=False
+        if (
+            selected_period
+            == "Todo el historial"
+        ):
+
+            latest_kpi = (
+                user_kpis
+                .sort_values(
+                    "year_month"
+                )
+                .iloc[-1]
             )
+
+        else:
+
+            latest_kpi = (
+                user_kpis[
+                    user_kpis[
+                        "year_month"
+                    ]
+                    == selected_period
+                ]
+                .iloc[0]
+            )
+
+        risk_level = (
+            latest_kpi[
+                "financial_risk_level"
+            ]
         )
 
+        savings_health = (
+            latest_kpi[
+                "savings_health"
+            ]
+        )
+
+        savings_rate = float(
+            latest_kpi[
+                "estimated_savings_rate"
+            ]
+        ) * 100
 
         top_category = (
-            category_totals
-            .index[0]
-        )
-
-
-        top_amount = (
-            category_totals
-            .iloc[0]
-        )
-
-
-        top_percentage = (
-            top_amount
-            / total_debits
-            * 100
-            if total_debits > 0
-            else 0
-        )
-
-
-        largest_debit = (
-            debit_df.loc[
-                debit_df[
-                    "monto"
-                ].idxmax()
+            latest_kpi[
+                "top_spending_category"
             ]
         )
-
 
         st.info(
             f"En {period_name}, "
-            f"la categoría con mayor salida de dinero fue "
-            f"**{top_category}**, "
-            f"con **MXN {top_amount:,.2f}**, "
-            f"equivalente al **{top_percentage:.1f}%** "
-            f"de las salidas registradas en el periodo. "
-            f"El movimiento individual más alto fue "
-            f"**{largest_debit['descripcion']}** "
-            f"por **MXN {largest_debit['monto']:,.2f}**."
+            f"tu nivel de riesgo financiero es "
+            f"**{risk_level}** y la salud de tu ahorro "
+            f"se clasifica como **{savings_health}**. "
+            f"Tu tasa estimada de ahorro es de "
+            f"**{savings_rate:.1f}%** y la categoría "
+            f"principal de gasto es **{top_category}**."
         )
 
 
-    # --------------------------------------------------------
-    # MOVIMIENTOS RECIENTES
-    # --------------------------------------------------------
-
-    st.subheader(
-        "Movimientos recientes"
-    )
-
-
-    recent = (
-        period_df
-        .sort_values(
-            "fecha",
-            ascending=False
-        )
-        .head(20)[
-            [
-                "fecha",
-                "descripcion",
-                "categoria",
-                "cuenta",
-                "tipo",
-                "monto",
-            ]
-        ]
-        .copy()
-    )
-
-
-    recent[
-        "fecha"
-    ] = (
-        recent[
-            "fecha"
-        ]
-        .dt.strftime(
-            "%Y-%m-%d"
-        )
-    )
-
-
-    recent[
-        "tipo"
-    ] = (
-        recent[
-            "tipo"
-        ]
-        .replace(
-            {
-                "debit":
-                    "Débito",
-                "credit":
-                    "Crédito",
-            }
-        )
-    )
-
-
-    recent = (
-        recent.rename(
-            columns={
-                "fecha":
-                    "Fecha",
-                "descripcion":
-                    "Descripción",
-                "categoria":
-                    "Categoría",
-                "cuenta":
-                    "Cuenta",
-                "tipo":
-                    "Tipo",
-                "monto":
-                    "Monto",
-            }
-        )
-    )
-
-
-    st.dataframe(
-        recent,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Monto":
-                st.column_config
-                .NumberColumn(
-                    "Monto",
-                    format="$%.2f",
-                ),
-        },
-    )
 
 
 # ============================================================
@@ -1162,16 +1097,14 @@ elif page == "Mi perfil":
 
         st.write(
             "**Movimientos registrados:** "
-            f"{len(user_transactions):,}"
+            f"{int(user_row['linked_transaction_count']):,}"
         )
 
 
         accounts = (
-            user_transactions[
-                "cuenta"
-            ]
-            .dropna()
-            .unique()
+            [user_row["primary_account"]]
+            if pd.notna(user_row["primary_account"])
+            else []
         )
 
 
@@ -1181,29 +1114,24 @@ elif page == "Mi perfil":
         )
 
 
-        if not user_transactions.empty:
+        if pd.notna(user_row["first_transaction_date"]):
 
-            first_date = (
-                user_transactions[
-                    "fecha"
+            first_date = pd.to_datetime(
+                user_row[
+                    "first_transaction_date"
                 ]
-                .min()
             )
 
-
-            last_date = (
-                user_transactions[
-                    "fecha"
+            last_date = pd.to_datetime(
+                user_row[
+                    "last_transaction_date"
                 ]
-                .max()
             )
-
 
             st.write(
                 "**Primer movimiento:** "
                 f"{first_date:%Y-%m-%d}"
             )
-
 
             st.write(
                 "**Último movimiento:** "
@@ -1211,55 +1139,7 @@ elif page == "Mi perfil":
             )
 
 
-    if len(accounts) > 0:
 
-        st.subheader(
-            "Mis cuentas"
-        )
-
-
-        account_summary = (
-            user_transactions
-            .groupby(
-                "cuenta"
-            )
-            .agg(
-                Movimientos=(
-                    "transaction_id",
-                    "count",
-                ),
-                Monto_total=(
-                    "monto",
-                    "sum",
-                ),
-            )
-            .reset_index()
-        )
-
-
-        account_summary = (
-            account_summary.rename(
-                columns={
-                    "cuenta":
-                        "Cuenta",
-                }
-            )
-        )
-
-
-        st.dataframe(
-            account_summary,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Monto_total":
-                    st.column_config
-                    .NumberColumn(
-                        "Monto total registrado",
-                        format="$%.2f",
-                    ),
-            },
-        )
 
 
 # ============================================================
