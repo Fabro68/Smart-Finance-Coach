@@ -254,6 +254,76 @@ Servir como dataset de entrenamiento para el modelo de Machine Learning de riesg
 
 ---
 
+### 4.6. gold_loan_ml_dataset
+
+> Sección agregada en la Semana 17.
+
+**Propósito:**  
+Preparar el dataset listo para entrenamiento del modelo de riesgo crediticio de la Semana 18, sin modificar `gold_loan_risk_training`.
+
+**Granularidad:**  
+Una fila por registro de préstamo (255,347 filas).
+
+**Fuente principal:**  
+Gold `loan_risk_training`.
+
+**Llave principal:**  
+- `loan_id`
+
+**Transformaciones principales:**
+
+- exclusión de columnas redundantes (`monthly_income`, `employment_years`);
+- conversión de `has_mortgage`, `has_dependents` y `has_cosigner` de `Yes`/`No` a `1`/`0`;
+- nuevas variables `estimated_monthly_payment` y `payment_to_income_ratio`;
+- columna `split` (`train` 70%, `validation` 15%, `test` 15%), determinista y estratificada por `default`.
+
+**Consideración importante:**  
+Al igual que `gold_loan_risk_training`, esta tabla no se relaciona con los usuarios del proyecto. Sirve para un modelo general de riesgo crediticio, no para estimar el riesgo individual de los usuarios del dashboard.
+
+**Detalle de variables:**  
+Ver `docs/ml_feature_dictionary.md`.
+
+---
+
+### 4.7. gold_ml_user_features
+
+> Sección agregada en la Semana 17.
+
+**Propósito:**  
+Feature store simulado: variables de comportamiento financiero por usuario y mes, con agregaciones temporales, detección de anomalías de gasto, contexto macroeconómico y variables de puente hacia el modelo reducido de riesgo crediticio.
+
+**Granularidad:**  
+Una fila por `user_id` y mes (63 filas: 3 usuarios con 21 meses cada uno).
+
+**Fuente principal:**  
+- Gold `user_monthly_finance`
+- Gold `monthly_macro_context`
+- Gold `user_financial_profile`
+- Gold `loan_ml_dataset` (solo el rango de ingreso del split `train`)
+
+**Llave compuesta:**
+
+- `user_id`
+- `year_month`
+
+**Variables principales:**
+
+- promedios y variabilidad de gasto e ingreso en ventanas de 3 y 6 meses;
+- variación mensual del gasto;
+- tasa de ahorro y ratio de endeudamiento calculados solo con transacciones;
+- meses con balance negativo;
+- z-score de gasto, bandera de anomalía y conteo de anomalías;
+- indicadores macroeconómicos del mes;
+- edad, estado civil mapeado, dependientes, ingreso anual en USD y bandera de ingreso fuera del rango de entrenamiento.
+
+**Consideración importante:**  
+Es una tabla demostrativa: solo 3 usuarios tienen transacciones vinculadas. No es una base de entrenamiento. Todas las ventanas usan solo el mes actual y meses anteriores para evitar fuga de información.
+
+**Detalle de variables:**  
+Ver `docs/ml_feature_dictionary.md`, sección 12.
+
+---
+
 ## 5. Relaciones del modelo
 
 El modelo analítico propuesto tendrá las siguientes relaciones lógicas:
@@ -279,6 +349,28 @@ Por otro lado:
 `gold_loan_risk_training`
 
 se mantendrá como un dominio analítico independiente orientado a Machine Learning.
+
+A partir de la Semana 17:
+
+`gold_loan_risk_training`
+1 ─── 1
+`gold_loan_ml_dataset`
+
+mediante la relación:
+
+`loan_id`
+
+`gold_loan_ml_dataset` pertenece al mismo dominio independiente y tampoco se relaciona con las tablas de usuarios.
+
+`gold_user_monthly_finance`
+1 ─── 1
+`gold_ml_user_features`
+
+mediante la relación:
+
+`user_id`, `year_month`
+
+`gold_ml_user_features` también utiliza `gold_monthly_macro_context` (por `year_month`) y `gold_user_financial_profile` (por `user_id`). De `gold_loan_ml_dataset` solo toma el rango de ingreso del split `train`; no existe una relación por llave entre préstamos y usuarios.
 
 ---
 
@@ -393,6 +485,8 @@ Permite estimar qué porcentaje del salario podría permanecer disponible despu�
 
 **Limitación:**  
 Es una aproximación y no debe interpretarse como ahorro bancario real.
+
+> **Nota (Semana 17):** en los datos actuales, el salario y las transacciones no están en la misma escala. El gasto mensual promedio equivale al 14%, 0.7% y 2% del salario de los usuarios 1, 2 y 3. Por eso, los indicadores que comparan ambas fuentes (`spending_to_salary_ratio`, `estimated_margin`, `estimated_savings_capacity` y `estimated_savings_rate`) deben interpretarse con cautela. Ver `docs/ml_feature_dictionary.md`, sección 12.8.
 
 ---
 
@@ -533,9 +627,12 @@ El modelo Gold propuesto se representa de forma lógica de la siguiente manera:
                  ▼
        gold_user_monthly_finance
                  │
-                 │ 1:N
+                 ├──── 1:N ────► gold_user_category_monthly
+                 │
+                 │ 1:1  (Semana 17; también usa profile, macro
+                 │       y el rango de ingreso de loan_ml_dataset)
                  ▼
-       gold_user_category_monthly
+       gold_ml_user_features
 
 
         loans
@@ -543,3 +640,7 @@ El modelo Gold propuesto se representa de forma lógica de la siguiente manera:
           ▼
  gold_loan_risk_training
       (independiente)
+          │
+          │ 1:1  (Semana 17)
+          ▼
+  gold_loan_ml_dataset

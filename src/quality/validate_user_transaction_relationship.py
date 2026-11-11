@@ -24,6 +24,8 @@ spark = (
 
 quality_run_id = create_quality_run_id()
 
+validation_passed = False
+
 
 try:
     users_df = (
@@ -272,5 +274,24 @@ try:
         f"{valid_linkage_percentage:.2f}%"
     )
 
+    # Solo la integridad referencial determina el resultado.
+    # Las metricas de vinculo son informativas.
+    validation_passed = orphan_transactions == 0
+
+    print()
+    print(
+        f"{orphan_status}: "
+        f"transaction_user_referential_integrity"
+    )
+
+    if validation_passed:
+        print("Overall result: PASS")
+    else:
+        print("Overall result: FAIL")
+
 finally:
     spark.stop()
+
+
+if not validation_passed:
+    sys.exit(1)
