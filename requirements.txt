@@ -1,7 +1,18 @@
-pandas
-numpy
-pyspark
-sqlalchemy
-psycopg2-binary
-great-expectations
-scikit-learn
+# Entorno local (Python 3.13): dashboard, analisis y Machine Learning.
+# Los jobs de Spark NO usan este archivo: corren en el contenedor
+# smart-finance-spark (Spark 3.5.5, Delta Lake 3.2.0, Python 3.8).
+
+# Datos y Delta Lake
+pandas==3.0.6
+numpy==2.5.4
+pyarrow==26.0.0
+deltalake==1.6.6
+
+# Dashboard
+streamlit==1.66.1
+
+# Machine Learning (Semana 18)
+scikit-learn==1.9.1
+joblib==1.6.0
+xgboost==3.4.1
+lightgbm==4.7.0
