@@ -1,3 +1,5 @@
+import sys
+
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, trim
 
@@ -15,6 +17,8 @@ spark = (
     .appName("validate_silver_transactions")
     .getOrCreate()
 )
+
+validation_passed = False
 
 try:
     df = spark.read.format("delta").load(SILVER_PATH)
@@ -208,7 +212,11 @@ try:
     print(f"Checks passed: {passed_checks}/{total_checks}")
     print(f"quality_run_id: {quality_run_id}")
 
-    if passed_checks == total_checks:
+    # Solo los checks estructurales determinan el resultado.
+    # La metrica de vinculo de usuarios es informativa.
+    validation_passed = passed_checks == total_checks
+
+    if validation_passed:
         print("Overall structural result: PASS")
     else:
         print("Overall structural result: FAIL")
@@ -237,3 +245,7 @@ try:
 
 finally:
     spark.stop()
+
+
+if not validation_passed:
+    sys.exit(1)
