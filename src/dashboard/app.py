@@ -562,6 +562,7 @@ with st.sidebar:
         [
             "Mis finanzas",
             "Mi perfil",
+            "Simulador",
             "Monitoreo técnico",
         ],
     )
@@ -1145,6 +1146,14 @@ elif page == "Mi perfil":
 # ============================================================
 # MONITOREO TÉCNICO
 # ============================================================
+
+elif page == "Simulador":
+
+    # Vista del simulador financiero (Semana 19).
+    from simulator_page import render_simulator
+
+    render_simulator(selected_user_id)
+
 
 elif page == "Monitoreo técnico":
 

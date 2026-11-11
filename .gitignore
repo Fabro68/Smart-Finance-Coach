@@ -54,3 +54,6 @@ data/quality/
 data/dashboard/
 
 data/gold/
+
+# Artefactos de Machine Learning (modelos y metricas generadas)
+models/

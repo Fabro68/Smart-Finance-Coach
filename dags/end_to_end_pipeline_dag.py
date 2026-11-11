@@ -185,6 +185,16 @@ with DAG(
         "src/analytics/gold_loan_risk_training.py",
     )
 
+    gold_loan_ml = spark_task(
+        "gold_loan_ml_dataset",
+        "src/analytics/gold_loan_ml_dataset.py",
+    )
+
+    gold_ml_user = spark_task(
+        "gold_ml_user_features",
+        "src/analytics/gold_ml_user_features.py",
+    )
+
     gold_kpis = spark_task(
         "gold_user_financial_kpis",
         "src/analytics/gold_user_financial_kpis.py",
@@ -233,8 +243,16 @@ with DAG(
     validate_transactions >> gold_category_monthly
     validate_economic >> gold_macro
     validate_loans >> gold_loan_risk
+    gold_loan_risk >> gold_loan_ml
 
     gold_monthly_finance >> gold_kpis
+
+    [
+        gold_monthly_finance,
+        gold_macro,
+        gold_profile,
+        gold_loan_ml,
+    ] >> gold_ml_user
 
     [
         gold_profile,
@@ -242,6 +260,8 @@ with DAG(
         gold_category_monthly,
         gold_macro,
         gold_loan_risk,
+        gold_loan_ml,
+        gold_ml_user,
         gold_kpis,
     ] >> validate_gold
 
