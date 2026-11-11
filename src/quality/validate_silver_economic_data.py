@@ -1,3 +1,5 @@
+import sys
+
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 
@@ -15,6 +17,8 @@ spark = (
     .appName("validate_silver_economic_data")
     .getOrCreate()
 )
+
+validation_passed = False
 
 try:
     df = spark.read.format("delta").load(SILVER_PATH)
@@ -177,10 +181,16 @@ try:
     print(f"Checks passed: {passed_checks}/{total_checks}")
     print(f"quality_run_id: {quality_run_id}")
 
-    if passed_checks == total_checks:
+    validation_passed = passed_checks == total_checks
+
+    if validation_passed:
         print("Overall result: PASS")
     else:
         print("Overall result: FAIL")
 
 finally:
     spark.stop()
+
+
+if not validation_passed:
+    sys.exit(1)
