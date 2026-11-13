@@ -563,6 +563,7 @@ with st.sidebar:
             "Mis finanzas",
             "Mi perfil",
             "Simulador",
+            "Asistente",
             "Monitoreo técnico",
         ],
     )
@@ -1153,6 +1154,14 @@ elif page == "Simulador":
     from simulator_page import render_simulator
 
     render_simulator(selected_user_id)
+
+
+elif page == "Asistente":
+
+    # Asistente financiero de IA (Semana 20).
+    from assistant_page import render_assistant
+
+    render_assistant(selected_user_id)
 
 
 elif page == "Monitoreo técnico":

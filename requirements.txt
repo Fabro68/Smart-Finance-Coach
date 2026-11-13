@@ -17,3 +17,8 @@ scikit-learn==1.9.1
 joblib==1.6.0
 xgboost==3.4.1
 lightgbm==4.7.0
+
+# Asistente de IA (Semana 20). Requiere Ollama local con el modelo llama3.2:3b.
+langchain-core==1.8.0
+langchain-ollama==1.1.0
+duckdb==2.0.0
